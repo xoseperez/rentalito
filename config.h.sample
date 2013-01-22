@@ -1,0 +1,12 @@
+#ifndef __CREDENTIALS_H__
+#define __CREDENTIALS_H__
+
+// Wifi parameters
+char passphrase[] = "passphrase";
+char ssid[] = "ssid";
+
+// MQTT parameters
+byte mqttServer[] = { 192, 168, 1, 10 };
+int mqttPort = 1883;
+
+#endif

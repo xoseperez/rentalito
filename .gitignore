@@ -1,0 +1,10 @@
+# Arduino
+
+*.o
+*.hex
+.dep
+.lib
+config.h
+
+# Eagle
+*.s#?
