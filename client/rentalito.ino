@@ -68,10 +68,20 @@ void debug(char * message) {
 
 void callback(char* topic, byte* payload, unsigned int length) {
     payload[length] = '\0';
-    Serial.print((char *) payload);
+    uint16_t position;
+    for (position=0; position<length; position++) {
+        if (payload[position] == '|') {
+            ++position;
+            break;
+        }
+    }
     matrix.clear();
-    display(LINE_TOP, "Power (W)");
-    display(LINE_BOTTOM, (char *) payload);
+    if (position>0) {
+        display(LINE_TOP, (char *) payload);
+        display(LINE_BOTTOM, (char *) payload[position]);
+    } else {
+        display(LINE_FULLSIZE, (char *) payload);
+    }
 }
 
 void setup() {
@@ -105,7 +115,7 @@ void setup() {
     if (mqttClient.connect("rentalito")) {
         
         debug("Subscribing");
-        mqttClient.subscribe("/benavent/general/power");
+        mqttClient.subscribe("/client/rentalito");
 
     } else {
         debug("Failed");
