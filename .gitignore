@@ -6,5 +6,8 @@
 .lib
 config.h
 
+# Python
+*.pyc
+
 # Eagle
 *.s#?

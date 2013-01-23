@@ -1,0 +1,29 @@
+general:
+
+    pidfile: /tmp/rentalito.pid
+    stderr: /tmp/rentalito.err
+    stdout: /tmp/rentalito.log
+    
+    debug: True
+
+    routes:
+        /benavent/general/power: /client/rentalito
+
+mqtt:
+    client_id: rentalitoServer
+    host: localhost
+    port: 1883
+    keepalive: 60
+    clean_session: False
+    qos: 0
+    status_topic: /service/rentalito/status
+    set_will: False
+
+processor:
+    filters:
+        /benavent/general/power:
+            type: format
+            parameters:
+                format: POTENCIA|{value}W
+
+
