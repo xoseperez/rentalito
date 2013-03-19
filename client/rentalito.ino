@@ -3,6 +3,7 @@
 #include <SoftwareSerial.h>
 #include <PubSubClient.h>
 #include <ht1632c.h>
+//#include <MemoryFree.h>
 #include "config.h"
 
 #define RX_PIN  2
@@ -15,8 +16,10 @@
 #define AD22103_PIN 0
 #define ERROR_LED 13
 
-#define UPDATE_DELAY 5000
-#define SCROLL_DELAY 20
+// Any delay will cause the chances to loose connection to raise
+#define SCROLL_DELAY 0
+#define AFTER_ERROR_DELAY 5000
+
 #define SMALL_FONT 2
 #define MEDIUM_FONT 16
 #define BIG_FONT 21
@@ -25,10 +28,24 @@
 #define LINE_BOTTOM 2
 #define LINE_FULLSIZE 3
 
-#define TEMPERATURE_OFFSET -1.0
+#define TEMPERATURE_OFFSET -3.0
 #define REPORT_INTERVAL 300000
 
+#define MQTT_MAX_PACKET_SIZE 168
+#define MQTT_KEEPALIVE 300
+
 void callback(char* topic, byte* payload, unsigned int length);
+
+// MQTT parameters
+byte mqttServer[] = { 192, 168, 1, 103 };
+int mqttPort = 1883;
+char mqttClientId[] = "rentalito";
+char publishTopic[] = "/client/rentalito";
+char subscribeTopic[] = "/client/rentalito";
+
+uint16_t position;
+boolean wifi_connected = false;
+int current_brightness = BRIGHTNESS;
 
 WiFlyClient wifiClient;
 SoftwareSerial wifiSerial(RX_PIN, TX_PIN);
@@ -65,47 +82,115 @@ void display(int position, char * text) {
     } else {
         matrix.puttext(0, y, text, color, CENTER);
     }
+
+}
+
+void debug(const __FlashStringHelper * console_text, uint8_t color) {
+    Serial.println(console_text);
+    matrix.plot(0, 0, color);
+    matrix.sendframe();
 }
 
 void check_temperature() {
     int val = analogRead(AD22103_PIN);
     float temperature = (5000.0 * val / 1023.0 - 250.0) / 28.0 + TEMPERATURE_OFFSET;
-    char payload[4];
+    char * payload = "00.0";
     dtostrf(temperature, 4, 1, payload);
-    mqttClient.publish("/benavent/livingroom/temperature", (byte *) payload, 4);
+    mqttClient.publish(publishTopic, (byte *) payload, 5);
+    Serial.print(F("Temperature: "));
+    Serial.println(payload);
 }
 
 void check_brightness() {
     int val = analogRead(LDR_PIN);
     int brightness = 16 * val / 1023;
-    matrix.pwm(brightness);
-}
-
-void debug(char * message) {
-    Serial.println(message);
-    matrix.clear();
-    display(LINE_TOP, message);
+    if (brightness != current_brightness) {
+        matrix.pwm(brightness);
+        current_brightness = brightness;
+        Serial.print(F("Brightness set to: "));
+        Serial.println(brightness);
+    }
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-    payload[length] = '\0';
+
+    // Copy the payload to the new buffer
+    char * message = (char *) malloc(length);
+    memcpy(message, payload, length);
+    message[length-1] = '\0';
+
+    Serial.print(topic);
+    Serial.print(F(": "));
+    Serial.println(message);
+
     uint16_t position;
     boolean found = false;
     for (position=0; position<length; position++) {
-        if (payload[position] == '|') {
-            payload[position] = '\0';
+        if (message[position] == '|') {
+            message[position] = '\0';
             ++position;
             found = true;
             break;
         }
     }
+
     matrix.clear();
     if (found) {
-        display(LINE_TOP, (char *) payload);
-        display(LINE_BOTTOM, (char *) payload + position);
+        display(LINE_TOP, message);
+        display(LINE_BOTTOM, message + position);
     } else {
-        display(LINE_FULLSIZE, (char *) payload);
+        display(LINE_FULLSIZE, message);
     }
+    free(message);
+
+    // The available-flush pair is a double security to ensure any
+    // incoming message is discarded.
+    // Apparently, cued messages or half formed messages cause the
+    // PubSubClient library to reset.
+    while (wifiClient.available()) {
+        wifiClient.flush();
+    }
+
+}
+
+void connectWifi() {
+
+    debug(F("Initialising"), RED);
+    WiFly.begin();
+
+    debug(F("Joining"), ORANGE);
+    if (!WiFly.join(ssid, passphrase, true)) {
+        digitalWrite(ERROR_LED, HIGH);
+        debug(F("Failed"), RED);
+        delay(AFTER_ERROR_DELAY);
+    } else {
+        wifi_connected = true;
+    }
+
+}
+
+void connectMQTT() {
+
+    wifi_connected = false;
+    connectWifi();
+
+    if (wifi_connected) {
+        // MQTT client setup
+        mqttClient.disconnect();
+        debug(F("Connecting"), GREEN);
+        if (mqttClient.connect(mqttClientId)) {
+            mqttClient.subscribe(subscribeTopic);
+            digitalWrite(ERROR_LED, LOW);
+            matrix.plot(0, 0, BLACK);
+            matrix.sendframe();
+
+        } else {
+            digitalWrite(ERROR_LED, HIGH);
+            debug(F("Failed"), RED);
+            delay(AFTER_ERROR_DELAY);
+        }
+    }
+
 }
 
 void setup() {
@@ -122,41 +207,26 @@ void setup() {
     Serial.begin(9600);
     wifiSerial.begin(9600);
     WiFly.setUart(&wifiSerial);
-    debug("Initializing");
-    WiFly.begin();
 
-    debug("Joining");
-    if (!WiFly.join(ssid, passphrase)) {
-        digitalWrite(ERROR_LED, HIGH);
-        debug("Failed");
-        while (1) {
-            // Hang on failure.
-        }
-    }
-    
-    debug("Connecting");
-    // MQTT client setup
-    if (mqttClient.connect("rentalito")) {
-        
-        debug("Subscribing");
-        mqttClient.subscribe("/client/rentalito");
-
-    } else {
-        debug("Failed");
-        digitalWrite(ERROR_LED, HIGH);
-    }
+    last_report = millis();
 
 }
 
 void loop() {
 
+    if (!mqttClient.loop()) {
+        connectMQTT();
+    }
+
+    /*
     unsigned long time = millis();
     if (time - last_report > REPORT_INTERVAL or time < last_report ) {
         check_temperature();
         last_report = time;
     }
+    */
+
     check_brightness();
-    mqttClient.loop();
 
 }
 
