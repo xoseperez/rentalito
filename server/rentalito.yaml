@@ -1,14 +1,12 @@
 general:
-
     pidfile: /tmp/rentalito.pid
     stderr: /tmp/rentalito.err
     stdout: /tmp/rentalito.log
-    
     debug: True
-
-    routes:
-        /benavent/general/power: /client/rentalito
-
+    publish_to: /client/rentalito
+    minimum_time: 5
+    time_length_ratio: 0.3
+    
 mqtt:
     client_id: rentalitoServer
     host: localhost
@@ -19,11 +17,36 @@ mqtt:
     status_topic: /service/rentalito/status
     set_will: False
 
-processor:
-    filters:
-        /benavent/general/power:
-            type: format
-            parameters:
-                format: POTENCIA|{value}W
+topics:
+    /benavent/general/power:
+        prioritary: 0
+    /benavent/outdoor/temperature:
+        prioritary: 0
+    /benavent/outdoor/pressure:
+        prioritary: 0
+    /benavent/outdoor/humidity:
+        prioritary: 0
+    /client/rentalito/message:
+        prioritary: 1
+        slots: 5
+        repetitions: 10
+        expires: 60
 
+filters:
+    /benavent/general/power:
+        type: format
+        parameters:
+            format: POTENCIA|{value}W
+    /benavent/outdoor/temperature:
+        type: format
+        parameters:
+            format: EXTERIOR|{value}C
+    /benavent/outdoor/pressure:
+        type: format
+        parameters:
+            format: EXTERIOR|{value}hPa
+    /benavent/outdoor/humidity:
+        type: format
+        parameters:
+            format: EXTERIOR|{value}%
 

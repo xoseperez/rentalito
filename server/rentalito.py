@@ -19,7 +19,7 @@
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __app__ = "Rentalito"
-__version__ = "0.1"
+__version__ = "0.2"
 __author__ = "Xose Pérez"
 __contact__ = "xose.perez@gmail.com"
 __copyright__ = "Copyright (C) 2013 Xose Pérez"
@@ -44,7 +44,13 @@ class Rentalito(Daemon):
     debug = True
     mqtt = None
     processor = None
-    routes = {}
+    publish_to = None
+    minimum_time = 5
+    time_length_ratio = 0.5
+    topics = {}
+    slots = []
+    slot_index = {}
+    next_event_time = time.time()
 
     def log(self, message):
         """
@@ -81,7 +87,7 @@ class Rentalito(Daemon):
         if result_code == 0:
             self.log("[INFO] Connected to MQTT broker")
             self.mqtt.send_connected()
-            for topic, new_topic in self.routes.iteritems():
+            for topic, new_topic in self.topics.iteritems():
                 self.log("[DEBUG] Subscribing to %s" % topic)
                 self.mqtt.subscribe(topic, 0)
         else:
@@ -97,23 +103,77 @@ class Rentalito(Daemon):
 
     def mqtt_on_subscribe(self, obj, mid, qos_list):
         """
-        Callback when succeeded ubscription
+        Callback when succeeded subscription
         """
         self.log("[INFO] Subscription with mid %s received." % mid)
 
     def mqtt_on_message(self, obj, msg):
         """
-        Incoming message, publish to Coms.com if there is a mapping match
+        Incoming message, enqueue it
         """
-        new_topic = self.routes.get(msg.topic, False)
-        if new_topic:
+        topic = self.topics.get(msg.topic, False)
+        if topic:
+
             try:
                 value = ctypes.string_at(msg.payload, msg.payloadlen)
             except:
                 value = msg.payload
-            new_value = self.processor.process(msg.topic, value)
-            self.log("[DEBUG] Republishing %s:%s as %s:%s" % (msg.topic, value, new_topic, new_value))
-            self.mqtt.publish(new_topic, new_value)
+            index = (self.slot_index.get(msg.topic, 0) + 1) % topic.get('slots', 1)
+            self.slot_index[msg.topic] = index
+
+            # Look for the slot
+            found = False
+            position = 0
+            for slot in self.slots:
+                if slot['topic'] == msg.topic and slot['index'] == index:
+                    found = True
+                    break
+                position = position + 1
+            if not found:
+                slot = dict()
+            slot['topic'] = msg.topic
+            slot['index'] = index
+            slot['value'] = value
+            slot['repetitions']= topic.get('repetitions', None)
+            expires = topic.get('expires', None)
+            slot['expires'] = time.time() + expires if expires else None
+            prioritary = topic.get('prioritary', 0) == 1
+            if found:
+                if prioritary:
+                    slot = self.slots.pop(position)
+                    self.slots.insert(0, slot)
+            else:
+                if prioritary:
+                    self.slots.insert(0, slot)
+                else:
+                    self.slots.append(slot)
+
+    def push_message(self):
+        if self.slots:
+
+            # get next slot
+            slot = self.slots.pop(0)
+
+            # if slot has expired return,
+            # we are not updating next_event_time so the loop will call
+            # this method again very shortly
+            if slot['expires'] and slot['expires'] < time.time():
+                return
+
+            # preprocess message and send
+            value = self.processor.process(slot['topic'], slot['value'])
+            self.mqtt.publish(self.publish_to, value)
+
+            # update repetitions and check if we have to reenqueue it
+            if not slot['repetitions'] == 0:
+                if slot['repetitions']:
+                    slot['repetitions'] = slot['repetitions'] - 1
+                self.slots.append(slot)
+
+            # calculate next update time
+            length = len(value.split('|')[-1:][0])
+            time_gap = max(self.minimum_time, length * self.time_length_ratio)
+            self.next_event_time = time.time() + time_gap
 
     def run(self):
         """
@@ -124,6 +184,8 @@ class Rentalito(Daemon):
 
         while True:
             self.mqtt.loop()
+            if time.time() > self.next_event_time:
+                self.push_message()
 
 if __name__ == "__main__":
 
@@ -133,7 +195,10 @@ if __name__ == "__main__":
     manager.stdout = config.get('general', 'stdout', '/dev/null')
     manager.stderr = config.get('general', 'stderr', '/dev/null')
     manager.debug = config.get('general', 'debug', False)
-    manager.routes = config.get('general', 'routes', [])
+    manager.publish_to = config.get('general', 'publish_to', '/client/rentalito')
+    manager.minimum_time = config.get('general', 'minimum_time', 5)
+    manager.time_length_ratio = config.get('general', 'time_length_ratio', 0.5)
+    manager.topics = config.get('topics', None, {});
 
     mqtt = Mosquitto(config.get('mqtt', 'client_id'))
     mqtt.host = config.get('mqtt', 'host')
@@ -146,7 +211,7 @@ if __name__ == "__main__":
     mqtt.set_will = config.get('mqtt', 'set_will')
     manager.mqtt = mqtt
 
-    processor = Processor(config.get('processor', 'filters', []))
+    processor = Processor(config.get('filters', None, {}))
     manager.processor = processor
 
     if len(sys.argv) == 2:
