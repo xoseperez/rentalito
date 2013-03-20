@@ -40,13 +40,16 @@ filters:
     /benavent/outdoor/temperature:
         type: format
         parameters:
-            format: EXTERIOR|{value}C
+            format: TEMP. EXT.|{value}C
     /benavent/outdoor/pressure:
-        type: format
-        parameters:
-            format: EXTERIOR|{value}hPa
+        - type: round
+          parameters: 
+            decimals: 0
+        - type: format
+          parameters:
+            format: PRES. EXT.|{value}hPa
     /benavent/outdoor/humidity:
         type: format
         parameters:
-            format: EXTERIOR|{value}%
+            format: HUMIT. EXT.|{value}%
 

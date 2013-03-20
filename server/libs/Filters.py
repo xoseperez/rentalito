@@ -88,8 +88,21 @@ class LinearFilter(Filter):
     name = 'linear'
     required = ['slope', 'offset']
     def process(self, value):
-        return int(self.parameters['slope'] * value + self.parameters['offset'])
+        return self.parameters['slope'] * float(value) + self.parameters['offset']
 FilterFactory.register(LinearFilter)
+
+class RoundFilter(Filter):
+    """
+    Rounds the number: y=round(x)
+    """
+    name = 'round'
+    required = ['decimals']
+    def process(self, value):
+        value = round(float(value), self.parameters['decimals'])
+        if self.parameters['decimals'] == 0:
+            value = int(value)
+        return value
+FilterFactory.register(RoundFilter)
 
 class BooleanFilter(Filter):
     """
@@ -98,7 +111,7 @@ class BooleanFilter(Filter):
     name = 'boolean'
     required = []
     def process(self, value):
-        return 0 if value == 0 else 1
+        return 0 if int(value) == 0 else 1
 FilterFactory.register(BooleanFilter)
 
 class NotFilter(Filter):
@@ -108,7 +121,7 @@ class NotFilter(Filter):
     name = 'not'
     required = []
     def process(self, value):
-        return 1 if value == 0 else 0
+        return 1 if int(value) == 0 else 0
 FilterFactory.register(NotFilter)
 
 class EnumFilter(Filter):
@@ -119,7 +132,7 @@ class EnumFilter(Filter):
     required = []
     def process(self, value):
         for from_value, to_value in self.parameters.iteritems():
-            if value == from_value:
+            if str(value) == str(from_value):
                 return to_value
         return to_value
 FilterFactory.register(EnumFilter)
@@ -132,7 +145,7 @@ class StepFilter(Filter):
     required = []
     def process(self, value):
         for threshold, to_value in self.parameters.iteritems():
-            if value <= threshold:
+            if float(value) <= threshold:
                 return to_value
         return to_value
 FilterFactory.register(StepFilter)
