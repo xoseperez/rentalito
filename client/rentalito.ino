@@ -17,7 +17,7 @@
 #define ERROR_LED 13
 
 // Any delay will cause the chances to loose connection to raise
-#define SCROLL_DELAY 0
+#define SCROLL_DELAY 20
 #define AFTER_ERROR_DELAY 5000
 
 #define SMALL_FONT 2
@@ -37,10 +37,10 @@
 void callback(char* topic, byte* payload, unsigned int length);
 
 // MQTT parameters
-byte mqttServer[] = { 192, 168, 1, 103 };
+byte mqttServer[] = { 192, 168, 1, 10 };
 int mqttPort = 1883;
 char mqttClientId[] = "rentalito";
-char publishTopic[] = "/client/rentalito";
+char publishTopic[] = "/benavent/rentalito/temperature";
 char subscribeTopic[] = "/client/rentalito";
 
 uint16_t position;
@@ -115,9 +115,9 @@ void check_brightness() {
 void callback(char* topic, byte* payload, unsigned int length) {
 
     // Copy the payload to the new buffer
-    char * message = (char *) malloc(length);
+    char * message = (char *) malloc(length+1);
     memcpy(message, payload, length);
-    message[length-1] = '\0';
+    message[length] = '\0';
 
     Serial.print(topic);
     Serial.print(F(": "));
