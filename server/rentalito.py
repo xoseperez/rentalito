@@ -191,7 +191,7 @@ if __name__ == "__main__":
 
     config = Config('rentalito.yaml')
 
-    manager = Rentalito(config.get('general', 'pidfile', '/tmp/mqtt2cosm.pid'))
+    manager = Rentalito(config.get('general', 'pidfile', '/tmp/rentalito.pid'))
     manager.stdout = config.get('general', 'stdout', '/dev/null')
     manager.stderr = config.get('general', 'stderr', '/dev/null')
     manager.debug = config.get('general', 'debug', False)

@@ -3,7 +3,6 @@
 #include <SoftwareSerial.h>
 #include <PubSubClient.h>
 #include <ht1632c.h>
-//#include <MemoryFree.h>
 #include "config.h"
 
 #define RX_PIN  2
