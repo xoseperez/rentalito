@@ -175,12 +175,29 @@ class Rentalito(Daemon):
             time_gap = max(self.minimum_time, length * self.time_length_ratio)
             self.next_event_time = time.time() + time_gap
 
+    def prepare(self):
+        """
+        Loads predefined messages
+        """
+        self.slots.append({
+            'topic': '/builtin/datetime',
+            'index': 1,
+            'value': None,
+            'repetitions': None,
+            'expires': None
+        })
+        self.processor.add_filter('/builtin/datetime', {
+            'type': 'format',
+            'parameters': {'format': '{date}|{time}'}
+        })
+
     def run(self):
         """
         Entry point, initiates components and loops forever...
         """
         self.log("[INFO] Starting " + __app__ + " v" + __version__)
         self.mqtt_connect()
+        self.prepare()
 
         while True:
             self.mqtt.loop()

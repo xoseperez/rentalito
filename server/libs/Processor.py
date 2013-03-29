@@ -38,6 +38,12 @@ class Processor(object):
         """
         self._filters = filters
 
+    def add_filter(self, topic, filter):
+        """
+        Adds a single filter configuration
+        """
+        self._filters[topic] = filter
+
     def process(self, topic, value):
         """
         Gets the filter strategy for the given topic,

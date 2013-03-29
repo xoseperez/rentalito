@@ -161,7 +161,7 @@ class FormatFilter(Filter):
         value = self.parameters['format'].format(
             value=value,
             date=now.strftime('%Y-%m-%d'),
-            time=now.strftime('%H:%M:%S'),
+            time=now.strftime('%H:%M'),
             datetime=now.strftime('%Y-%m-%d %H:%M:%S')
         )
         return value
